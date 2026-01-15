@@ -51,9 +51,10 @@ FILE_LOGGING_LEVEL = None
 try:
     from robosuite.macros_private import *
 except ImportError:
-    import robosuite
-    from robosuite.utils.log_utils import ROBOSUITE_DEFAULT_LOGGER
-
-    ROBOSUITE_DEFAULT_LOGGER.warning("No private macro file found!")
-    ROBOSUITE_DEFAULT_LOGGER.warning("It is recommended to use a private macro file")
-    ROBOSUITE_DEFAULT_LOGGER.warning("To setup, run: python {}/scripts/setup_macros.py".format(robosuite.__path__[0]))
+    import os as _os
+    import warnings as _warnings
+    _robosuite_path = _os.path.dirname(_os.path.abspath(__file__))
+    _warnings.warn(
+        "No private macro file found! It is recommended to use a private macro file. "
+        f"To setup, run: python {_robosuite_path}/scripts/setup_macros.py"
+    )

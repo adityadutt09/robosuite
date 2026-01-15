@@ -1073,6 +1073,30 @@ class MjSim:
 
     @classmethod
     def from_xml_string(cls, xml):
+        # For MuJoCo 3.x+ which is stricter about mesh volume validation:
+        # - Add inertia="shell" to mesh assets to handle thin/small-volume meshes
+        # - Remove shellinertia from mesh geoms (causes conflicts in MuJoCo 3.x)
+        import xml.etree.ElementTree as ET
+        try:
+            root = ET.fromstring(xml)
+            
+            # Add inertia="shell" to all mesh assets to handle small mesh volumes
+            asset = root.find("asset")
+            if asset is not None:
+                for mesh in asset.findall("mesh"):
+                    if mesh.get("inertia") is None:
+                        mesh.set("inertia", "shell")
+            
+            # Remove shellinertia from mesh geoms (not compatible with MuJoCo 3.x mesh handling)
+            for geom in root.iter("geom"):
+                if geom.get("shellinertia") is not None:
+                    # Only remove if this is a mesh geom
+                    if geom.get("type") == "mesh" or geom.get("mesh") is not None:
+                        del geom.attrib["shellinertia"]
+            
+            xml = ET.tostring(root, encoding="unicode")
+        except ET.ParseError:
+            pass  # If XML parsing fails, let MuJoCo handle the error
         model = mujoco.MjModel.from_xml_string(xml)
         return cls(model)
 
