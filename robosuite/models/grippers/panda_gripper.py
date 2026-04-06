@@ -27,11 +27,13 @@ class PandaGripperBase(GripperModel):
 
     @property
     def _important_geoms(self):
+        left_pads = [f"finger1_pad_r{r}c{c}" for r in range(5) for c in range(6)]
+        right_pads = [f"finger2_pad_r{r}c{c}" for r in range(5) for c in range(6)]
         return {
-            "left_finger": ["finger1_collision", "finger1_pad_collision"],
-            "right_finger": ["finger2_collision", "finger2_pad_collision"],
-            "left_fingerpad": ["finger1_pad_collision"],
-            "right_fingerpad": ["finger2_pad_collision"],
+            "left_finger": ["finger1_collision"] + left_pads,
+            "right_finger": ["finger2_collision"] + right_pads,
+            "left_fingerpad": left_pads,
+            "right_fingerpad": right_pads,
         }
 
 

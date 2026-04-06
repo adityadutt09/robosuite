@@ -1071,29 +1071,54 @@ class MjSim:
         # offscreen render context object
         self._render_context_offscreen = None
 
+    _plugins_loaded = False
+
+    @classmethod
+    def _ensure_mujoco_plugins(cls):
+        """Load MuJoCo native plugin shared libraries (sensor, actuator, etc.).
+
+        Must be called before ``MjModel.from_xml_string`` so that any
+        ``<plugin>`` declarations in the XML can resolve at compile time.
+        """
+        if cls._plugins_loaded:
+            return
+        from pathlib import Path
+
+        plugin_dir = Path(mujoco.__file__).parent / "plugin"
+        if plugin_dir.is_dir():
+            for lib in sorted(plugin_dir.glob("*.so")) + sorted(plugin_dir.glob("*.dylib")):
+                try:
+                    mujoco.mj_loadPluginLibrary(str(lib))
+                except Exception:
+                    pass  # non-critical; skip plugins that fail to load
+        cls._plugins_loaded = True
+
     @classmethod
     def from_xml_string(cls, xml):
+        # Ensure native plugins (touch_grid, etc.) are available before compiling.
+        cls._ensure_mujoco_plugins()
+
         # For MuJoCo 3.x+ which is stricter about mesh volume validation:
         # - Add inertia="shell" to mesh assets to handle thin/small-volume meshes
         # - Remove shellinertia from mesh geoms (causes conflicts in MuJoCo 3.x)
         import xml.etree.ElementTree as ET
         try:
             root = ET.fromstring(xml)
-            
+
             # Add inertia="shell" to all mesh assets to handle small mesh volumes
             asset = root.find("asset")
             if asset is not None:
                 for mesh in asset.findall("mesh"):
                     if mesh.get("inertia") is None:
                         mesh.set("inertia", "shell")
-            
+
             # Remove shellinertia from mesh geoms (not compatible with MuJoCo 3.x mesh handling)
             for geom in root.iter("geom"):
                 if geom.get("shellinertia") is not None:
                     # Only remove if this is a mesh geom
                     if geom.get("type") == "mesh" or geom.get("mesh") is not None:
                         del geom.attrib["shellinertia"]
-            
+
             xml = ET.tostring(root, encoding="unicode")
         except ET.ParseError:
             pass  # If XML parsing fails, let MuJoCo handle the error

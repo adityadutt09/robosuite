@@ -40,6 +40,7 @@ class MujocoXML(object):
         self.tendon = self.create_default_element("tendon")
         self.equality = self.create_default_element("equality")
         self.contact = self.create_default_element("contact")
+        self.extension = self.create_default_element("extension")
 
         # Parse any default classes and replace them inline
         default = self.create_default_element("default")
@@ -77,7 +78,13 @@ class MujocoXML(object):
         if found is not None:
             return found
         ele = ET.Element(name)
-        self.root.append(ele)
+        # MuJoCo requires <extension> to appear before elements that reference
+        # plugins (e.g. <sensor>).  Insert it at position 0 so plugin
+        # declarations are always parsed first.
+        if name == "extension":
+            self.root.insert(0, ele)
+        else:
+            self.root.append(ele)
         return ele
 
     def merge(self, others, merge_body="default"):
@@ -121,6 +128,45 @@ class MujocoXML(object):
                 self.equality.append(one_equality)
             for one_contact in other.contact:
                 self.contact.append(one_contact)
+            self.merge_extensions(other)
+
+    @staticmethod
+    def _extension_child_key(element):
+        """
+        Generates a stable identity key for a child of <extension/>.
+
+        Prefers compact keying by tag + sorted attributes, and falls back to full serialized content
+        when nested content exists and attributes alone are insufficient.
+        """
+        attrib_key = (element.tag, tuple(sorted(element.attrib.items())))
+        if len(element) == 0 and not (element.text and element.text.strip()):
+            return ("attrib",) + attrib_key
+        return ("xml", ET.tostring(element, encoding="unicode"))
+
+    def merge_extensions(self, other):
+        """
+        Merges @other's extension declarations, avoiding duplicates.
+
+        Args:
+            other (MujocoXML): other xml file whose extension declarations will be merged into this one
+        """
+        # Ensure destination exists even if this XML did not originally define extensions.
+        self_extension = self.root.find("extension")
+        if self_extension is None:
+            self_extension = ET.Element("extension")
+            self.root.append(self_extension)
+            self.extension = self_extension
+
+        other_extension = other.root.find("extension")
+        if other_extension is None:
+            return
+
+        existing = {self._extension_child_key(child) for child in self_extension}
+        for child in other_extension:
+            child_key = self._extension_child_key(child)
+            if child_key not in existing:
+                self_extension.append(child)
+                existing.add(child_key)
 
     def get_model(self, mode="mujoco"):
         """
